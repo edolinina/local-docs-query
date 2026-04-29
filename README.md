@@ -19,33 +19,17 @@ A simple local document Q&A system using:
 
 ## 🛠 Setup
 
-### 1. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Install cli
+### 1. Install cli
 ```bash
 pip install -e .
-pyinstaller --onefile cli.py
 ```
 
-### 3. Start Ollama
-```bash
-ollama run mistral
-```
-
-### 4. Index the target folder
+### 2. Index the target folder
 ```bash
 docsquery index ./docs
 ```
 
-### 5. Ask a question
+### 3. Ask a question
 ```bash
 docsquery ask 'What is the meaning of model overfitting?'
-```
-
-### 6. Start Q&A bot
-```bash
-docchat chat
 ```

@@ -21,7 +21,7 @@ from .config_manager import ConfigManager
 import typer
 from time import perf_counter
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer()
 
 DEFAULT_MODEL = "google/gemma-3-4b-it" #"microsoft/Phi-3-mini-4k-instruct"
 
@@ -53,20 +53,35 @@ def setup(model: str = typer.Option(
     typer.echo(f"Downloading {model}...")
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    AutoTokenizer.from_pretrained(model)
+    AutoTokenizer.from_pretrained(model, device_map="auto", load_in_4bit=True)
     AutoModelForCausalLM.from_pretrained(model)
 
     typer.echo("Model downloaded and cached.")
 
 
 @app.command()
-def ask(query, top_k=5):
+def ask(
+    query: str,
+    top_k: int = 3,
+    folder: str = typer.Option(None, "--folder", "-f"),
+    show_sources: bool = typer.Option(
+        False,
+        "--sources",
+        "-s",
+        help="Show source documents in the output"
+    ),
+):
     """Ask a question"""
+    filters = {}
+
+    if folder:
+        filters["folder"] = folder
+
     cfg = ConfigManager()
     model = cfg.get_model()
 
     loader = DocsLoader()
-    retriever = loader.get_retriever(top_k=top_k)
+    retriever = loader.get_retriever(top_k=top_k, filters=filters)
 
     qa = QA(retriever, model_name=model)
 
@@ -79,20 +94,22 @@ def ask(query, top_k=5):
     typer.echo(f"\nAnswer ({elapsed_time} s):\n")
     typer.echo(answer)
 
-    typer.echo("\nSources:\n")
+    if show_sources:
+        typer.echo("\nSources:\n")
 
-    for i, doc in enumerate(docs, 1):
-        meta = doc.metadata
+        for i, doc in enumerate(docs, 1):
+            meta = doc.metadata
+            folder = meta.get("folder")
 
-        typer.echo(f"[{i}] {meta.get('file', 'unknown')}")
+            typer.echo(f"[{i}] {folder}/{meta.get('file', 'unknown')}")
 
-        if "page" in meta:
-            typer.echo(f"    page: {meta['page']}")
+            if "page" in meta:
+                typer.echo(f"    page: {meta['page']}")
 
-        if "slide" in meta:
-            typer.echo(f"    slide: {meta['slide']}")
+            if "slide" in meta:
+                typer.echo(f"    slide: {meta['slide']}")
 
-        typer.echo()
+    typer.echo()
 
 
 if __name__ == "__main__":

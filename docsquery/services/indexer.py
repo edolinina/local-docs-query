@@ -14,7 +14,7 @@ from langchain.schema import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     UnstructuredWordDocumentLoader,
-    UnstructuredPDFLoader,
+    PyPDFLoader,
     UnstructuredPowerPointLoader,
     TextLoader,
 )
@@ -100,7 +100,6 @@ class DocsLoader:
 
         if all_chunks:
             self.vectordb.add_documents(all_chunks)
-            self.vectordb.persist()
 
         print(f"Indexed {len(all_chunks)} chunks")
 
@@ -135,7 +134,7 @@ class DocsLoader:
         return chunks
 
     def process_pdf(self, file_path):
-        loader = UnstructuredPDFLoader(file_path)
+        loader = PyPDFLoader(file_path)
         pages = loader.load()
 
         splitter = RecursiveCharacterTextSplitter(
@@ -190,5 +189,5 @@ class DocsLoader:
 
         return chunks
 
-    def get_retriever(self, top_k=5):
-        return self.vectordb.as_retriever(search_kwargs={"k": int(top_k)})
+    def get_retriever(self, top_k=3, filters={}):
+        return self.vectordb.as_retriever(search_kwargs={"k": int(top_k), "filter": filters})

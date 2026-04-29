@@ -10,10 +10,11 @@ class HFLLM:
             model=model_name,
             device_map="cpu",
             dtype="auto",
-            token=token
+            token=token,
+            trust_remote_code=True
         )
 
-    def generate(self, prompt, temperature=0.2, max_tokens=512):
+    def generate(self, prompt, temperature=0.2, max_tokens=256):
         result = self.pipe(
             prompt,
             max_new_tokens=max_tokens,
