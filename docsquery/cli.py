@@ -5,11 +5,6 @@ import logging
 # Silence warnings
 warnings.filterwarnings("ignore")
 
-# Silence transformers logs
-from transformers import logging as hf_logging
-hf_logging.set_verbosity_error()
-hf_logging.disable_progress_bar()
-
 # Silence torch
 logging.getLogger("torch").setLevel(logging.ERROR)
 
@@ -19,14 +14,36 @@ from .services.rag import QA
 from .config_manager import ConfigManager
 
 import typer
+import requests
 from time import perf_counter
 
 app = typer.Typer()
 
-DEFAULT_MODEL = "google/gemma-3-4b-it" #"microsoft/Phi-3-mini-4k-instruct"
+DEFAULT_MODELS = {
+    "hf": "google/gemma-3-4b-it",
+    "ollama": "llama3.1",
+}
+DEFAULT_PROVIDER = "hf"
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+def pull_ollama_model(base_url: str, model: str):
+    typer.echo(f"Pulling model '{model}' from {base_url}...")
+
+    try:
+        response = requests.post(
+            f"{base_url.rstrip('/')}/api/pull",
+            json={"name": model},
+        )
+        response.raise_for_status()
+
+        typer.echo("✅ Model pulled successfully.")
+
+    except requests.exceptions.RequestException as e:
+        typer.echo(f"❌ Failed to pull model: {e}")
+        raise typer.Exit(1)
 
 @app.command()
-def index(folder):
+def index(folder: str):
     """Index documents from a provided folder path"""
 
     typer.echo(f"Indexing folder: {folder}")
@@ -37,27 +54,64 @@ def index(folder):
     typer.echo(result)
 
 @app.command()
-def setup(model: str = typer.Option(
-        DEFAULT_MODEL,
-        prompt=True,
-        help="Hugging Face model name"
-    )):
-    """Configure the HuggingFace LLM model and pre-download it"""
-    hf_logging.enable_progress_bar()
+def setup(
+    provider: str = typer.Option(
+        "hf",
+        prompt="Provider (hf/ollama)"
+    ),
+    model: str = typer.Option(
+        None,
+        help="Model name"
+    ),
+    base_url: str = typer.Option(
+        None,
+        "--url",
+        help="Ollama base URL (only for ollama provider)"
+    ),
+):
+    provider = provider.lower().strip()
+
+    if provider not in {"hf", "ollama"}:
+        typer.echo("❌ Provider must be 'hf' or 'ollama'")
+        raise typer.Exit(1)
+
+    default_model = DEFAULT_MODELS[provider]
+    if not model:
+        model = typer.prompt("Model", default=default_model)
+
+    config = {
+        "provider": provider,
+        "model": model,
+    }
+
+    if provider == "ollama" and not base_url:
+        base_url = typer.prompt(
+            "Ollama URL",
+            default=DEFAULT_OLLAMA_URL
+        )
+        config["base_url"] = base_url
 
     cfg = ConfigManager()
-    cfg.setup_model(model)
-    
-    typer.echo(f"Model set to: {model}")
+    cfg.save(config)
 
-    typer.echo(f"Downloading {model}...")
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    typer.echo(f"Provider: {provider}")
+    typer.echo(f"Model: {model}")
 
-    AutoTokenizer.from_pretrained(model, device_map="auto", load_in_4bit=True)
-    AutoModelForCausalLM.from_pretrained(model)
+    if provider == "hf":
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import logging as hf_logging
+        hf_logging.enable_progress_bar()
 
-    typer.echo("Model downloaded and cached.")
+        typer.echo(f"Downloading HF model: {model}...")
+        AutoTokenizer.from_pretrained(model)
+        AutoModelForCausalLM.from_pretrained(model, device_map="cpu")
+        typer.echo("✅ Model cached.")
 
+    elif provider == "ollama":
+        typer.echo(f"Ollama URL: {base_url}")
+
+        pull_ollama_model(base_url, model)
+        typer.echo("✅ Ollama configured.")
 
 @app.command()
 def ask(
@@ -76,14 +130,12 @@ def ask(
 
     if folder:
         filters["folder"] = folder
-
-    cfg = ConfigManager()
-    model = cfg.get_model()
-
+    
     loader = DocsLoader()
     retriever = loader.get_retriever(top_k=top_k, filters=filters)
 
-    qa = QA(retriever, model_name=model)
+    config = ConfigManager().get_config()
+    qa = QA(config, retriever)
 
     start = perf_counter()
 

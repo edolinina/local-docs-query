@@ -190,4 +190,7 @@ class DocsLoader:
         return chunks
 
     def get_retriever(self, top_k=3, filters={}):
-        return self.vectordb.as_retriever(search_kwargs={"k": int(top_k), "filter": filters})
+        search_kwargs={"k": int(top_k)}
+        if filters:
+            search_kwargs["filter"] = filters
+        return self.vectordb.as_retriever(search_kwargs=search_kwargs)

@@ -1,20 +1,33 @@
 import os
-from transformers import pipeline
+import requests
 
 
-class HFLLM:
-    def __init__(self, model_name):
+MAX_TOKENS = 256
+
+class BaseLLM:
+    def generate(self, prompt: str, **kwargs) -> str:
+        raise NotImplementedError
+
+class HFLLM(BaseLLM):
+    def __init__(self, model):
+
+        from transformers import pipeline
+        # Silence transformers logs
+        from transformers import logging as hf_logging
+        hf_logging.set_verbosity_error()
+        hf_logging.disable_progress_bar()
+
         token = os.getenv("HF_TOKEN")
+
         self.pipe = pipeline(
             "text-generation",
-            model=model_name,
+            model=model,
             device_map="cpu",
             dtype="auto",
             token=token,
-            trust_remote_code=True
         )
 
-    def generate(self, prompt, temperature=0.2, max_tokens=256):
+    def generate(self, prompt, max_tokens=MAX_TOKENS):
         result = self.pipe(
             prompt,
             max_new_tokens=max_tokens,
@@ -22,12 +35,49 @@ class HFLLM:
         )
         return result[0]["generated_text"]
 
+class OllamaLLM(BaseLLM):
+    def __init__(self, model_name, base_url):
+        self.model = model_name
+        self.url = f"{base_url.rstrip('/')}/api/generate"
+
+    def generate(self, prompt, max_tokens=MAX_TOKENS):
+        response = requests.post(
+            self.url,
+            json={
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": max_tokens,
+                    "temperature": 0.2,
+                }
+            },
+        )
+        response.raise_for_status()
+        return response.json()["response"]
+
+class LLMFactory:
+    @staticmethod
+    def create(config):
+        provider = config["provider"]
+
+        if provider == "hf":
+            return HFLLM(config["model"])
+
+        elif provider == "ollama":
+            return OllamaLLM(
+                config["model"],
+                config.get("base_url", "http://localhost:11434")
+            )
+
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
 
 class QA:
-    def __init__(self, retriever, model_name, max_context_chars=4000):
+    def __init__(self, config, retriever, max_context_chars=4000):
         self.retriever = retriever
-        self.llm = HFLLM(model_name)
         self.max_context_chars = max_context_chars
+        self.llm = LLMFactory.create(config)
 
     def _build_context(self, docs):
         context = ""

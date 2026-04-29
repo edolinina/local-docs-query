@@ -65,6 +65,6 @@ class ConfigManager:
         self.save({"model": model_name})
         typer.echo(f"✅ Model set to: {model_name}")
 
-    def get_model(self):
+    def get_config(self):
         config = self.require()
-        return config["model"]
+        return config
