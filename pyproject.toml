@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docsquery"
+version = "0.1.0"
+
+dependencies = [
+  "torch==2.8.0",
+  "typer",
+  "rich",
+  "chromadb",
+  "langchain",
+  "langchain-chroma",
+  "langchain-community",
+  "sentence-transformers",
+  "unstructured[local-inference]",
+  "python-pptx",
+  "python-docx",
+  "pypdf"
+]
+
+[project.scripts]
+docsquery = "docsquery.cli:app"
+
+[tool.setuptools.packages.find]
+exclude = ["chroma_db*"]
