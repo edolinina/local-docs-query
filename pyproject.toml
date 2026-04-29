@@ -8,7 +8,7 @@ version = "0.1.0"
 
 dependencies = [
   "requests",
-  "torch==2.8.0",
+  "torch>=2.8.0",
   "typer",
   "rich",
   "chromadb",
