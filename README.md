@@ -1,4 +1,4 @@
-# 📚 DocChat – Local RAG CLI
+# 📚 DocsQuery – Local RAG CLI
 
 A simple local document Q&A system with pluggable LLM backends.
 
