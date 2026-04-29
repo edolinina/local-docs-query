@@ -35,7 +35,7 @@ class MiniLMEmbeddings(Embeddings):
 
 class DocsLoader:
     def __init__(self, folder_path=None, store_path="./chroma_db",
-                 chunk_size=500, chunk_overlap=50):
+                 chunk_size=500, chunk_overlap=50, collection_name="docs"):
         self.folder_path = folder_path
         self.store_path = store_path
         self.embeddings = MiniLMEmbeddings()
@@ -44,7 +44,9 @@ class DocsLoader:
         self.chunk_overlap = chunk_overlap
         self.timestamp = str(datetime.now())
 
+        self.collection_name = collection_name
         self.vectordb = Chroma(
+            collection_name=self.collection_name,
             persist_directory=self.store_path,
             embedding_function=self.embeddings,
         )
