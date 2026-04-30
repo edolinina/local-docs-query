@@ -6,9 +6,7 @@ import logging
 from datetime import datetime
 from rich.progress import track
 
-from langchain.embeddings.base import Embeddings
 from langchain_chroma import Chroma
-from sentence_transformers import SentenceTransformer
 
 from langchain.schema import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -22,23 +20,48 @@ from langchain_community.document_loaders import (
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
-class MiniLMEmbeddings(Embeddings):
-    def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+def resolve_device(device: str):
+    import torch
 
-    def embed_documents(self, texts):
-        return self.model.encode(texts).tolist()
+    if device == "auto":
+        if torch.cuda.is_available():
+            return "cuda"
+        elif torch.backends.mps.is_available():
+            return "mps"
+        else:
+            return "cpu"
 
-    def embed_query(self, text):
-        return self.model.encode([text])[0].tolist()
+    return device
 
+class EmbeddingsFactory:
+    @staticmethod
+    def create(config: str):
+        provider = config.get("provider", "hf")
+        if provider == "hf":
+            from langchain_huggingface import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={"device": resolve_device(config.get("device"))},
+                encode_kwargs={"batch_size": 32}
+            )
+
+        elif provider == "ollama":
+            from langchain_ollama import OllamaEmbeddings
+            return OllamaEmbeddings(
+                model="nomic-embed-text",
+                base_url=config.get("base_url", "http://localhost:11434")
+            )
+
+        else:
+            raise ValueError(f"Unknown embeddings: {name}")
 
 class DocsLoader:
-    def __init__(self, folder_path=None, store_path="./chroma_db",
+    def __init__(self, config, folder_path=None, store_path="./chroma_db",
                  chunk_size=500, chunk_overlap=50, collection_name="docs"):
         self.folder_path = folder_path
         self.store_path = store_path
-        self.embeddings = MiniLMEmbeddings()
+        
+        self.embeddings = EmbeddingsFactory.create(config)
 
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap

@@ -48,26 +48,18 @@ def index(folder: str):
 
     typer.echo(f"Indexing folder: {folder}")
 
-    loader = DocsLoader(folder_path=folder)
+    config = ConfigManager().get_config()
+    loader = DocsLoader(config, folder_path=folder)
     result = loader.process_folder()
 
     typer.echo(result)
 
 @app.command()
 def setup(
-    provider: str = typer.Option(
-        "hf",
-        prompt="Provider (hf/ollama)"
-    ),
-    model: str = typer.Option(
-        None,
-        help="Model name"
-    ),
-    base_url: str = typer.Option(
-        None,
-        "--url",
-        help="Ollama base URL (only for ollama provider)"
-    ),
+    provider: str = typer.Option("hf", prompt="Provider (hf/ollama)"),
+    model: str = typer.Option(None, help="Model name"),
+    base_url: str = typer.Option(None, "--url", help="Ollama base URL (only for ollama provider)"),
+    device: str = typer.Option(None, help="Device (auto/cpu/cuda)"),
 ):
     provider = provider.lower().strip()
 
@@ -83,6 +75,23 @@ def setup(
         "provider": provider,
         "model": model,
     }
+
+    if provider == "hf":
+        if not device:
+            device = typer.prompt("Device (auto/cpu/cuda)", default="auto")
+
+        import torch
+
+        if device == "cuda" and not torch.cuda.is_available():
+            typer.echo("⚠️ CUDA not available, falling back to cpu")
+            device = "cpu"
+
+        if device == "mps" and not torch.backends.mps.is_available():
+            typer.echo("⚠️ MPS not available, falling back to cpu")
+            device = "cpu"
+
+
+    config["device"] = device
 
     if provider == "ollama" and not base_url:
         base_url = typer.prompt(
@@ -104,7 +113,7 @@ def setup(
 
         typer.echo(f"Downloading HF model: {model}...")
         AutoTokenizer.from_pretrained(model)
-        AutoModelForCausalLM.from_pretrained(model, device_map="cpu")
+        AutoModelForCausalLM.from_pretrained(model, device_map=config["device"])
         typer.echo("✅ Model cached.")
 
     elif provider == "ollama":
@@ -131,10 +140,11 @@ def ask(
     if folder:
         filters["folder"] = folder
     
-    loader = DocsLoader()
+    config = ConfigManager().get_config()
+
+    loader = DocsLoader(config)
     retriever = loader.get_retriever(top_k=top_k, filters=filters)
 
-    config = ConfigManager().get_config()
     qa = QA(config, retriever)
 
     start = perf_counter()

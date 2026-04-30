@@ -32,7 +32,19 @@ Supports:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+
+# minimal - Ollama only
+pip install -e ".[ollama]"
+
+# hugging face support only
+pip install -e ".[hf]"
+
+# full setup
+pip install  -e .
+
+# CPU-only install (recommended for HF)
+pip install "docsquery[hf]" \
+  --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ---

@@ -9,7 +9,7 @@ class BaseLLM:
         raise NotImplementedError
 
 class HFLLM(BaseLLM):
-    def __init__(self, model):
+    def __init__(self, model, device):
 
         from transformers import pipeline
         # Silence transformers logs
@@ -22,8 +22,7 @@ class HFLLM(BaseLLM):
         self.pipe = pipeline(
             "text-generation",
             model=model,
-            device_map="cpu",
-            dtype="auto",
+            device_map=device,
             token=token,
         )
 
@@ -62,7 +61,7 @@ class LLMFactory:
         provider = config["provider"]
 
         if provider == "hf":
-            return HFLLM(config["model"])
+            return HFLLM(config["model"], config.get("device", "auto"))
 
         elif provider == "ollama":
             return OllamaLLM(
@@ -92,7 +91,7 @@ class QA:
 You are a helpful assistant.
 
 ONLY use the provided context to answer the question.
-If the answer is not in the context, say: "I don't know".
+If the answer is not in the context, say: "I can't find relevant information in the provided documents".
 
 Context:
 {context}
@@ -107,7 +106,7 @@ Answer:
         docs = self.retriever.invoke(query)
 
         if not docs:
-            return "No relevant documents found."
+            return "No relevant documents found.", []
 
         context = self._build_context(docs)
         prompt = self._build_prompt(query, context)

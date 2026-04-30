@@ -14,8 +14,30 @@ class ConfigManager:
     def _ensure_config_dir(self):
         os.makedirs(self.config_dir, exist_ok=True)
 
+    def validate_config(self, new_config):
+        current_config = self.get_config()
+
+        chroma_exists = os.path.exists("./chroma_db")
+
+        if current_config and chroma_exists:
+            config_changed = (
+                current_config.get("provider") != new_config.get("provider")
+                or current_config.get("model") != new_config.get("model")
+            )
+
+            if config_changed:
+                typer.echo("\n⚠️ Configuration changed!")
+                typer.echo("Previously indexed documents were embedded using a different model/provider.")
+                typer.echo("👉 You should re-index your documents to avoid incorrect results.")
+
+                if typer.confirm("Do you want to delete existing embeddings now?", default=False):
+                    import shutil
+                    shutil.rmtree("./chroma_db", ignore_errors=True)
+                    typer.echo("🗑️ Existing embeddings removed. Please run `docsquery index` again.")
+
     def save(self, data):
         self._ensure_config_dir()
+        self.validate_config(data)
         with open(self.config_file, "w") as f:
             json.dump(data, f, indent=2)
 

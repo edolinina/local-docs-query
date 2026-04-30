@@ -7,15 +7,13 @@ name = "docsquery"
 version = "0.1.0"
 
 dependencies = [
-  "requests",
-  "torch>=2.8.0",
   "typer",
   "rich",
   "chromadb",
   "langchain",
+  "langchain-core",
   "langchain-chroma",
   "langchain-community",
-  "sentence-transformers",
   "unstructured[local-inference]",
   "python-pptx",
   "python-docx",
@@ -27,3 +25,7 @@ docsquery = "docsquery.cli:app"
 
 [tool.setuptools.packages.find]
 exclude = ["chroma_db*"]
+
+[project.optional-dependencies]
+hf = ["torch>=2.8.0", "transformers", "sentence-transformers", "langchain-huggingface"]
+ollama = ["langchain-ollama"]
