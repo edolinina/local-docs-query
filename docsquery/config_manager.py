@@ -1,6 +1,8 @@
 import os
 import json
 import typer
+import shutil
+import requests
 
 from huggingface_hub import model_info
 from huggingface_hub.utils import RepositoryNotFoundError, GatedRepoError
@@ -10,34 +12,39 @@ class ConfigManager:
     def __init__(self, config_dir=None):
         self.config_dir = config_dir or os.path.expanduser("~/.docsquery")
         self.config_file = os.path.join(self.config_dir, "config.json")
+        self.data = self.load()
 
     def _ensure_config_dir(self):
         os.makedirs(self.config_dir, exist_ok=True)
 
-    def validate_config(self, new_config):
-        current_config = self.get_config()
+    def get_path(self):
+        return self.config_file
+
+    def invalidate_db(self, new_config):
+        current_config = self.data
+        embedding = current_config["embedding"] \
+            if "embedding" in current_config else current_config
 
         chroma_exists = os.path.exists("./chroma_db")
 
-        if current_config and chroma_exists:
+        if embedding and chroma_exists:
             config_changed = (
-                current_config.get("provider") != new_config.get("provider")
-                or current_config.get("model") != new_config.get("model")
+                embedding.get("provider") != new_config["embedding"]["provider"]
+                or embedding.get("model") != new_config["embedding"]["model"]
             )
 
             if config_changed:
-                typer.echo("\n⚠️ Configuration changed!")
+                typer.echo("\n⚠️ Embedding configuration changed!")
                 typer.echo("Previously indexed documents were embedded using a different model/provider.")
                 typer.echo("👉 You should re-index your documents to avoid incorrect results.")
 
                 if typer.confirm("Do you want to delete existing embeddings now?", default=False):
-                    import shutil
                     shutil.rmtree("./chroma_db", ignore_errors=True)
                     typer.echo("🗑️ Existing embeddings removed. Please run `docsquery index` again.")
 
     def save(self, data):
         self._ensure_config_dir()
-        self.validate_config(data)
+        self.invalidate_db(data)
         with open(self.config_file, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -48,11 +55,16 @@ class ConfigManager:
         with open(self.config_file) as f:
             return json.load(f)
 
-    def require(self):
-        config = self.load()
+    def get(self):
+        return self.data
 
-        if not config or "model" not in config:
-            typer.echo("❌ Model not configured. Run `docsquery setup` first.")
+    def require(self):
+        if not self.get_embedding_model():
+            typer.echo("❌ Embedding model not configured. Run `docsquery setup` first.")
+            raise typer.Exit(code=1)
+
+        if not self.get_llm_model():
+            typer.echo("❌ LLM model not configured. Run `docsquery setup` first.")
             raise typer.Exit(code=1)
 
         return config
@@ -80,13 +92,31 @@ class ConfigManager:
 
         return False
 
-    def setup_model(self, model_name):
-        if not self.validate_model(model_name):
+    def setup_hf_model(self, model, device):
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import logging as hf_logging
+
+        hf_logging.enable_progress_bar()
+
+        print(f"Downloading HF model: {model}...")
+        AutoTokenizer.from_pretrained(model)
+        AutoModelForCausalLM.from_pretrained(model)
+        print("✅ Model cached.")
+
+    def setup_ollama_model(self, base_url, model):
+        from .services.utils import pull_ollama_model
+  
+        typer.echo(f"Pulling model '{model}' from {base_url}...")
+        try:
+            pull_ollama_model(base_url, model)
+            typer.echo("✅ Model pulled successfully.")
+
+        except requests.exceptions.RequestException as e:
+            typer.echo(f"❌ Failed to pull model: {e}")
             raise typer.Exit(1)
 
-        self.save({"model": model_name})
-        typer.echo(f"✅ Model set to: {model_name}")
+    def get_embedding_model(self):
+        return self.data.get("embedding", {}).get("model")
 
-    def get_config(self):
-        config = self.require()
-        return config
+    def get_llm_model(self):
+        return self.data.get("llm", {}).get("model")

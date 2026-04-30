@@ -76,7 +76,7 @@ class QA:
     def __init__(self, config, retriever, max_context_chars=4000):
         self.retriever = retriever
         self.max_context_chars = max_context_chars
-        self.llm = LLMFactory.create(config)
+        self.llm = LLMFactory.create(config["llm"])
 
     def _build_context(self, docs):
         context = ""

@@ -8,7 +8,7 @@ from rich.progress import track
 
 from langchain_chroma import Chroma
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     UnstructuredWordDocumentLoader,
@@ -20,35 +20,26 @@ from langchain_community.document_loaders import (
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
 
-def resolve_device(device: str):
-    import torch
-
-    if device == "auto":
-        if torch.cuda.is_available():
-            return "cuda"
-        elif torch.backends.mps.is_available():
-            return "mps"
-        else:
-            return "cpu"
-
-    return device
-
 class EmbeddingsFactory:
     @staticmethod
     def create(config: str):
-        provider = config.get("provider", "hf")
+        provider = config["provider"]
+        model = config["model"]
+
         if provider == "hf":
             from langchain_huggingface import HuggingFaceEmbeddings
+
             return HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": resolve_device(config.get("device"))},
+                model_name=model,
+                model_kwargs={"device": config.get("device")},
                 encode_kwargs={"batch_size": 32}
             )
 
         elif provider == "ollama":
             from langchain_ollama import OllamaEmbeddings
+
             return OllamaEmbeddings(
-                model="nomic-embed-text",
+                model=model,
                 base_url=config.get("base_url", "http://localhost:11434")
             )
 
@@ -61,7 +52,7 @@ class DocsLoader:
         self.folder_path = folder_path
         self.store_path = store_path
         
-        self.embeddings = EmbeddingsFactory.create(config)
+        self.embeddings = EmbeddingsFactory.create(config["embedding"])
 
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap

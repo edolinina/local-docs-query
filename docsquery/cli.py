@@ -1,4 +1,6 @@
 import os
+import json
+
 import warnings
 import logging
 
@@ -10,8 +12,10 @@ logging.getLogger("torch").setLevel(logging.ERROR)
 
 from .services.indexer import DocsLoader
 from .services.rag import QA
+from .services.utils import resolve_device, pull_ollama_model
 
 from .config_manager import ConfigManager
+from .constants import *
 
 import typer
 import requests
@@ -19,28 +23,6 @@ from time import perf_counter
 
 app = typer.Typer()
 
-DEFAULT_MODELS = {
-    "hf": "google/gemma-3-4b-it",
-    "ollama": "llama3.1",
-}
-DEFAULT_PROVIDER = "hf"
-DEFAULT_OLLAMA_URL = "http://localhost:11434"
-
-def pull_ollama_model(base_url: str, model: str):
-    typer.echo(f"Pulling model '{model}' from {base_url}...")
-
-    try:
-        response = requests.post(
-            f"{base_url.rstrip('/')}/api/pull",
-            json={"name": model},
-        )
-        response.raise_for_status()
-
-        typer.echo("✅ Model pulled successfully.")
-
-    except requests.exceptions.RequestException as e:
-        typer.echo(f"❌ Failed to pull model: {e}")
-        raise typer.Exit(1)
 
 @app.command()
 def index(folder: str):
@@ -48,79 +30,98 @@ def index(folder: str):
 
     typer.echo(f"Indexing folder: {folder}")
 
-    config = ConfigManager().get_config()
+    config = ConfigManager().get()
     loader = DocsLoader(config, folder_path=folder)
     result = loader.process_folder()
 
     typer.echo(result)
 
 @app.command()
-def setup(
-    provider: str = typer.Option("hf", prompt="Provider (hf/ollama)"),
-    model: str = typer.Option(None, help="Model name"),
-    base_url: str = typer.Option(None, "--url", help="Ollama base URL (only for ollama provider)"),
-    device: str = typer.Option(None, help="Device (auto/cpu/cuda)"),
-):
-    provider = provider.lower().strip()
+def config():
+    """Show current configuration"""
 
-    if provider not in {"hf", "ollama"}:
-        typer.echo("❌ Provider must be 'hf' or 'ollama'")
+    cfg = ConfigManager()
+    config = cfg.get()
+
+    if not config:
+        typer.echo("❌ No configuration found. Run `docsquery setup` first.")
         raise typer.Exit(1)
 
-    default_model = DEFAULT_MODELS[provider]
-    if not model:
-        model = typer.prompt("Model", default=default_model)
+    typer.echo("Current configuration:\n")
+    typer.echo(json.dumps(config, indent=2))
+
+    typer.echo(f"\nConfig path: {cfg.get_path()}")
+
+@app.command()
+def setup(
+    embedding_provider: str = typer.Option("hf", prompt="Embedding Provider (hf/ollama)"),
+    embedding_model: str = typer.Option(None, help="Embedding model"),
+    llm_provider: str = typer.Option("hf", prompt="LLM Provider (hf/ollama)"),
+    llm_model: str = typer.Option(None, help="LLM model"),
+    base_url: str = typer.Option(None, "--url", help="Ollama base URL"),
+    device: str = typer.Option(None, help="Device (auto/cpu/cuda/mps)"),
+):
+
+    llm_provider = llm_provider.lower().strip()
+    embedding_provider = embedding_provider.lower().strip()
+
+    if embedding_provider not in {"hf", "ollama"}:
+        typer.echo("❌ Invalid embedding provider")
+        raise typer.Exit(1)
+
+    if llm_provider not in {"hf", "ollama"}:
+        typer.echo("❌ Invalid LLM provider")
+        raise typer.Exit(1)
+
+    default_emb_model = DEFAULT_EMBEDDINGS[embedding_provider]
+    if not embedding_model:
+        embedding_model = typer.prompt("Embedding Model", default=default_emb_model)
+
+    default_llm_model = DEFAULT_MODELS[llm_provider]
+    if not llm_model:
+        llm_model = typer.prompt("LLM Model", default=default_llm_model)
 
     config = {
-        "provider": provider,
-        "model": model,
+        "llm": {
+            "provider": llm_provider,
+            "model": llm_model,
+        },
+        "embedding": {
+            "provider": embedding_provider,
+            "model": embedding_model,
+        }
     }
 
-    if provider == "hf":
+    if embedding_provider == "hf" or llm_provider == "hf":
         if not device:
             device = typer.prompt("Device (auto/cpu/cuda)", default="auto")
+        device = resolve_device(device)
 
-        import torch
+        if embedding_provider == "hf":
+            config["embedding"]["device"] = device
+        if llm_provider == "hf":
+            config["llm"]["device"] = device
 
-        if device == "cuda" and not torch.cuda.is_available():
-            typer.echo("⚠️ CUDA not available, falling back to cpu")
-            device = "cpu"
-
-        if device == "mps" and not torch.backends.mps.is_available():
-            typer.echo("⚠️ MPS not available, falling back to cpu")
-            device = "cpu"
-
-
-    config["device"] = device
-
-    if provider == "ollama" and not base_url:
-        base_url = typer.prompt(
-            "Ollama URL",
-            default=DEFAULT_OLLAMA_URL
-        )
-        config["base_url"] = base_url
+    if llm_provider == "ollama":
+        if not base_url:
+            base_url = typer.prompt("Ollama URL", default=DEFAULT_OLLAMA_URL)
+        config["llm"]["base_url"] = base_url
 
     cfg = ConfigManager()
     cfg.save(config)
 
-    typer.echo(f"Provider: {provider}")
-    typer.echo(f"Model: {model}")
+    typer.echo(f"LLM: {llm_provider} ({llm_model})")
+    typer.echo(f"Embeddings: {embedding_provider} ({embedding_model})")
 
-    if provider == "hf":
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        from transformers import logging as hf_logging
-        hf_logging.enable_progress_bar()
+    # Setup models
+    if embedding_provider == "ollama":
+        cfg.setup_ollama_model(config["llm"]["base_url"], embedding_model)
 
-        typer.echo(f"Downloading HF model: {model}...")
-        AutoTokenizer.from_pretrained(model)
-        AutoModelForCausalLM.from_pretrained(model, device_map=config["device"])
-        typer.echo("✅ Model cached.")
+    if llm_provider == "hf":
+        cfg.setup_hf_model(llm_model, device)
 
-    elif provider == "ollama":
-        typer.echo(f"Ollama URL: {base_url}")
-
-        pull_ollama_model(base_url, model)
-        typer.echo("✅ Ollama configured.")
+    else:
+        cfg.setup_ollama_model(config["llm"]["base_url"], llm_model)
 
 @app.command()
 def ask(
@@ -140,7 +141,7 @@ def ask(
     if folder:
         filters["folder"] = folder
     
-    config = ConfigManager().get_config()
+    config = ConfigManager().get()
 
     loader = DocsLoader(config)
     retriever = loader.get_retriever(top_k=top_k, filters=filters)
