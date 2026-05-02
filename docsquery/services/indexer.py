@@ -44,13 +44,13 @@ class EmbeddingsFactory:
             )
 
         else:
-            raise ValueError(f"Unknown embeddings: {name}")
+            raise ValueError(f"Unknown embeddings provider: {provider}")
 
 class DocsLoader:
-    def __init__(self, config, file_path=None, store_path="./chroma_db",
-                 chunk_size=500, chunk_overlap=50, collection_name="docs"):
+    def __init__(self, config, file_path=None, chunk_size=500, chunk_overlap=50, 
+            collection_name="docs"):
         self.file_path = file_path
-        self.store_path = store_path
+        self.store_path = config["vector_store"]
         
         self.embeddings = EmbeddingsFactory.create(config["embedding"])
 
@@ -215,7 +215,7 @@ class DocsLoader:
 
         return chunks
 
-    def get_retriever(self, top_k=3, filters={}):
+    def get_retriever(self, top_k=3, filters=None):
         search_kwargs={"k": int(top_k)}
         if filters:
             search_kwargs["filter"] = filters

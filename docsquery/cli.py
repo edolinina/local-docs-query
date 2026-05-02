@@ -36,9 +36,8 @@ def index(path: str = typer.Argument(..., help="Absolute file/folder path")):
 
     config = ConfigManager().get()
     loader = DocsLoader(config, file_path=path)
-    result = loader.process_target_path()
+    loader.process_target_path()
 
-    typer.echo(result)
 
 @app.command()
 def config():
@@ -56,8 +55,10 @@ def config():
 
     typer.echo(f"\nConfig path: {cfg.get_path()}")
 
+
 @app.command()
 def setup(
+    vector_store_path: str = typer.Option("./chroma_db", prompt="Path to a local Vector Store"),
     embedding_provider: str = typer.Option("hf", prompt="Embedding Provider (hf/ollama)"),
     embedding_model: str = typer.Option(None, help="Embedding model"),
     llm_provider: str = typer.Option("hf", prompt="LLM Provider (hf/ollama)"),
@@ -86,6 +87,7 @@ def setup(
         llm_model = typer.prompt("LLM Model", default=default_llm_model)
 
     config = {
+        "vector_store": vector_store_path,
         "llm": {
             "provider": llm_provider,
             "model": llm_model,
@@ -127,6 +129,7 @@ def setup(
     else:
         cfg.setup_ollama_model(config["llm"]["base_url"], llm_model)
 
+
 @app.command()
 def ask(
     query: str,
@@ -166,9 +169,9 @@ def ask(
 
         for i, doc in enumerate(docs, 1):
             meta = doc.metadata
-            folder = meta.get("folder")
+            src_folder = meta.get("folder")
 
-            typer.echo(f"[{i}] {folder}/{meta.get('file', 'unknown')}")
+            typer.echo(f"[{i}] {src_folder}/{meta.get('file', 'unknown')}")
 
             if "page" in meta:
                 typer.echo(f"    page: {meta['page']}")

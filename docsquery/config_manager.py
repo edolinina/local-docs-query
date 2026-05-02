@@ -22,12 +22,16 @@ class ConfigManager:
 
     def invalidate_db(self, new_config):
         current_config = self.data
+        if not current_config:
+            return
+
         embedding = current_config["embedding"] \
             if "embedding" in current_config else current_config
 
-        chroma_exists = os.path.exists("./chroma_db")
+        vector_store = current_config.get("vector_store")
+        vector_store_exists = os.path.exists(vector_store)
 
-        if embedding and chroma_exists:
+        if embedding and vector_store_exists:
             config_changed = (
                 embedding.get("provider") != new_config["embedding"]["provider"]
                 or embedding.get("model") != new_config["embedding"]["model"]
@@ -39,7 +43,7 @@ class ConfigManager:
                 typer.echo("👉 You should re-index your documents to avoid incorrect results.")
 
                 if typer.confirm("Do you want to delete existing embeddings now?", default=False):
-                    shutil.rmtree("./chroma_db", ignore_errors=True)
+                    shutil.rmtree(vector_store, ignore_errors=True)
                     typer.echo("🗑️ Existing embeddings removed. Please run `docsquery index` again.")
 
     def save(self, data):
@@ -50,12 +54,13 @@ class ConfigManager:
 
     def load(self):
         if not os.path.exists(self.config_file):
-            return None
+            return {}
 
         with open(self.config_file) as f:
             return json.load(f)
 
     def get(self):
+        self.require()
         return self.data
 
     def require(self):
@@ -66,8 +71,6 @@ class ConfigManager:
         if not self.get_llm_model():
             typer.echo("❌ LLM model not configured. Run `docsquery setup` first.")
             raise typer.Exit(code=1)
-
-        return config
 
     def validate_model(self, model_name):
         try:
