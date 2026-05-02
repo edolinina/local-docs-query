@@ -30,7 +30,7 @@ Supports:
 ### 1. Install CLI
 
 ```bash
-python3 -m venv .venv
+python3 -m venv .venv # or pip install virtualenv & virtualenv .venv
 source .venv/bin/activate
 
 # minimal - Ollama only
@@ -74,7 +74,7 @@ Ollama URL [http://localhost:11434]:
 
 ---
 
-### 🔐 Hugging Face (only if using HF)
+### 🔐 Hugging Face (only if using HF LLM)
 
 Set your token:
 
@@ -122,7 +122,11 @@ docsquery setup \
 ## 📂 Index Documents
 
 ```bash
+# the whole folder
 docsquery index ./docs
+
+# single file
+docsquery index ./docs/book.pdf
 ```
 
 * Recursively scans folder

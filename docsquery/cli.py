@@ -25,14 +25,18 @@ app = typer.Typer()
 
 
 @app.command()
-def index(folder: str):
-    """Index documents from a provided folder path"""
+def index(path: str = typer.Argument(..., help="Absolute file/folder path")):
+    """Index documents from a provided folder or file path"""
 
-    typer.echo(f"Indexing folder: {folder}")
+    if not os.path.exists(path):
+        typer.echo("❌ File not found")
+        raise typer.Exit(1)
+
+    typer.echo(f"Indexing file/s: {path}")
 
     config = ConfigManager().get()
-    loader = DocsLoader(config, folder_path=folder)
-    result = loader.process_folder()
+    loader = DocsLoader(config, file_path=path)
+    result = loader.process_target_path()
 
     typer.echo(result)
 

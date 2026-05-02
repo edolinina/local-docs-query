@@ -47,9 +47,9 @@ class EmbeddingsFactory:
             raise ValueError(f"Unknown embeddings: {name}")
 
 class DocsLoader:
-    def __init__(self, config, folder_path=None, store_path="./chroma_db",
+    def __init__(self, config, file_path=None, store_path="./chroma_db",
                  chunk_size=500, chunk_overlap=50, collection_name="docs"):
-        self.folder_path = folder_path
+        self.file_path = file_path
         self.store_path = store_path
         
         self.embeddings = EmbeddingsFactory.create(config["embedding"])
@@ -82,35 +82,47 @@ class DocsLoader:
             "file": os.path.basename(file_path),
             "file_path": file_path,
             "type": doc_type,
-            "folder": self.folder_path,
+            "folder": os.path.dirname(file_path),
             "timestamp": self.timestamp,
             "file_hash": self.file_hash(file_path),
             "chunk_id": str(uuid.uuid4()),
         }
 
-    def process_folder(self):
-        if not self.folder_path:
-            raise ValueError("folder_path is required for indexing")
+    def get_file_chunks(self, file_path):
+        file_name = os.path.basename(file_path)
+        if file_name.startswith(("~$", ".", "._")):
+            return []
+
+        file_hash = self.file_hash(file_path)
+
+        if self.is_already_indexed(file_hash):
+            print(f"Skipping (already indexed): {file_name}")
+            return []
+
+        try:
+            chunks = self.process_file(file_path)
+            return chunks
+        except Exception as e:
+            print(f"Skipping {file_name}, exception occured: {e}")
+
+    def process_target_path(self):
+        if not self.file_path:
+            raise ValueError("Path is required for indexing")
 
         all_chunks = []
+        all_files = []
 
-        for root, _, files in os.walk(self.folder_path):
-            for file in track(files, description="Processing files"):
-                if file.startswith(("~$", ".", "._")):
-                    continue
+        if os.path.isfile(self.file_path):
+            all_files = [self.file_path]
+            all_chunks.extend(self.get_file_chunks(self.file_path))
 
-                path = os.path.join(root, file)
-                file_hash = self.file_hash(path)
+        else:
+            for root, _, files in os.walk(self.file_path):
+                for file in files:
+                    all_files.append(os.path.join(root, file))
 
-                if self.is_already_indexed(file_hash):
-                    print(f"Skipping (already indexed): {file}")
-                    continue
-
-                try:
-                    chunks = self.process_file(path)
-                    all_chunks.extend(chunks)
-                except Exception as e:
-                    print(f"Skipping {file}: {e}")
+        for file in track(all_files, description="Processing files"):
+            all_chunks.extend(self.get_file_chunks(file))
 
         if all_chunks:
             self.vectordb.add_documents(all_chunks)
