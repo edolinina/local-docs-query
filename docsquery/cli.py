@@ -108,10 +108,13 @@ def setup(
         if llm_provider == "hf":
             config["llm"]["device"] = device
 
-    if llm_provider == "ollama":
+    if embedding_provider == "ollama" or llm_provider == "ollama":
         if not base_url:
             base_url = typer.prompt("Ollama URL", default=DEFAULT_OLLAMA_URL)
-        config["llm"]["base_url"] = base_url
+        if llm_provider == "ollama":
+            config["llm"]["base_url"] = base_url
+        if embedding_provider == "ollama":
+            config["embedding"]["base_url"] = base_url
 
     cfg = ConfigManager()
     cfg.save(config)
@@ -121,11 +124,10 @@ def setup(
 
     # Setup models
     if embedding_provider == "ollama":
-        cfg.setup_ollama_model(config["llm"]["base_url"], embedding_model)
+        cfg.setup_ollama_model(config["embedding"]["base_url"], embedding_model)
 
     if llm_provider == "hf":
         cfg.setup_hf_model(llm_model, device)
-
     else:
         cfg.setup_ollama_model(config["llm"]["base_url"], llm_model)
 
@@ -146,7 +148,7 @@ def ask(
     filters = {}
 
     if folder:
-        filters["folder"] = folder
+        filters["folder"] = os.path.abspath(folder)
     
     config = ConfigManager().get()
 

@@ -12,9 +12,10 @@ dependencies = [
   "chromadb",
   "langchain",
   "langchain-core",
+  "huggingface-hub",
   "langchain-chroma",
   "langchain-community",
-  "unstructured[local-inference]",
+  "unstructured[docx,pptx]",
   "python-pptx",
   "python-docx",
   "pypdf"

@@ -104,6 +104,7 @@ class DocsLoader:
             return chunks
         except Exception as e:
             print(f"Skipping {file_name}, exception occured: {e}")
+            return []
 
     def process_target_path(self):
         if not self.file_path:
@@ -114,7 +115,6 @@ class DocsLoader:
 
         if os.path.isfile(self.file_path):
             all_files = [self.file_path]
-            all_chunks.extend(self.get_file_chunks(self.file_path))
 
         else:
             for root, _, files in os.walk(self.file_path):

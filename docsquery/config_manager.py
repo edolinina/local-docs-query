@@ -29,7 +29,7 @@ class ConfigManager:
             if "embedding" in current_config else current_config
 
         vector_store = current_config.get("vector_store")
-        vector_store_exists = os.path.exists(vector_store)
+        vector_store_exists = os.path.exists(vector_store) if vector_store else False
 
         if embedding and vector_store_exists:
             config_changed = (

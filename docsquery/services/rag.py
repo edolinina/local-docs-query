@@ -2,7 +2,7 @@ import os
 import requests
 
 
-MAX_TOKENS = 256
+MAX_TOKENS = 512
 
 class BaseLLM:
     def generate(self, prompt: str, **kwargs) -> str:
@@ -24,6 +24,7 @@ class HFLLM(BaseLLM):
             model=model,
             device_map=device,
             token=token,
+            return_full_text=False
         )
 
     def generate(self, prompt, max_tokens=MAX_TOKENS):

@@ -42,9 +42,6 @@ pip install -e ".[hf]"
 # full setup
 pip install  -e .
 
-# CPU-only install (recommended for HF)
-pip install "docsquery[hf]" \
-  --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ---
