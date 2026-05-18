@@ -137,6 +137,7 @@ def ask(
     query: str,
     top_k: int = 3,
     folder: str = typer.Option(None, "--folder", "-f"),
+    keywords: str = typer.Option(None, "--keywords", "-k"),
     show_sources: bool = typer.Option(
         False,
         "--sources",
@@ -146,6 +147,7 @@ def ask(
 ):
     """Ask a question"""
     filters = {}
+    _keywords = [k.strip() for k in keywords.split(",")] if keywords else []
 
     if folder:
         filters["folder"] = os.path.abspath(folder)
@@ -153,13 +155,13 @@ def ask(
     config = ConfigManager().get()
 
     loader = DocsLoader(config)
-    retriever = loader.get_retriever(top_k=top_k, filters=filters)
+    docs = loader.get_docs(query, top_k=int(top_k), filters=filters, keywords=_keywords)
 
-    qa = QA(config, retriever)
+    qa = QA(config)
 
     start = perf_counter()
 
-    answer, docs = qa.ask(query)
+    answer, docs = qa.ask(query, docs)
 
     elapsed_time = round((perf_counter() - start), 2)
 

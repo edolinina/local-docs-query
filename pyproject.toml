@@ -18,7 +18,8 @@ dependencies = [
   "unstructured[docx,pptx]",
   "python-pptx",
   "python-docx",
-  "pypdf"
+  "pypdf",
+  "rank_bm25"
 ]
 
 [project.scripts]

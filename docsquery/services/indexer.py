@@ -10,6 +10,7 @@ from langchain_chroma import Chroma
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.retrievers import BM25Retriever
 from langchain_community.document_loaders import (
     UnstructuredWordDocumentLoader,
     PyPDFLoader,
@@ -215,8 +216,23 @@ class DocsLoader:
 
         return chunks
 
-    def get_retriever(self, top_k=3, filters=None):
-        search_kwargs={"k": int(top_k)}
+    def get_retriever(self, top_k=5, filters=None):
+        search_kwargs={"k": top_k}
         if filters:
             search_kwargs["filter"] = filters
         return self.vectordb.as_retriever(search_kwargs=search_kwargs)
+
+    def get_docs(self, query, top_k=3, filters=None, keywords=None):
+        semantic_retriever = self.get_retriever(top_k * 2, filters)
+        semantic_docs = self.get_retriever().invoke(query)
+
+        if not keywords:
+            return semantic_docs[:top_k]
+
+        keyword_query = " ".join(keywords)
+
+        bm25 = BM25Retriever.from_documents(semantic_docs)
+        bm25.k = min(top_k, len(semantic_docs))
+
+        # rerank candidate docs by keywords
+        return bm25.invoke(keyword_query)

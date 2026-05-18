@@ -74,8 +74,7 @@ class LLMFactory:
             raise ValueError(f"Unknown provider: {provider}")
 
 class QA:
-    def __init__(self, config, retriever, max_context_chars=4000):
-        self.retriever = retriever
+    def __init__(self, config, max_context_chars=4000):
         self.max_context_chars = max_context_chars
         self.llm = LLMFactory.create(config["llm"])
 
@@ -103,9 +102,7 @@ Question:
 Answer:
 """
 
-    def ask(self, query):
-        docs = self.retriever.invoke(query)
-
+    def ask(self, query, docs):
         if not docs:
             return "No relevant documents found.", []
 
