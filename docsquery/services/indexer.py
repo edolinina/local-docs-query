@@ -224,7 +224,7 @@ class DocsLoader:
 
     def get_docs(self, query, top_k=3, filters=None, keywords=None):
         semantic_retriever = self.get_retriever(top_k * 2, filters)
-        semantic_docs = self.get_retriever().invoke(query)
+        semantic_docs = semantic_retriever.invoke(query)
 
         if not keywords:
             return semantic_docs[:top_k]

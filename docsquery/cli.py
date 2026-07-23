@@ -66,6 +66,7 @@ def setup(
     base_url: str = typer.Option(None, "--url", help="Ollama base URL"),
     device: str = typer.Option(None, help="Device (auto/cpu/cuda/mps)"),
 ):
+    """Setup vector store path, LLM and Embeddings provides and models"""
 
     llm_provider = llm_provider.lower().strip()
     embedding_provider = embedding_provider.lower().strip()
